@@ -474,7 +474,7 @@ class YoloDataset(Dataset):
                 over_threshold[np.argmin(ratio)] = True
                 
                 #-------------------------------------------------------#
-                #   每个网格负责预测三个预测框 
+                #   每个网格负责预测三个预测框 ， 目标框由那几个anchor负责预测
                 #   遍历3个anchor ，分别找出所有该anchor对应的目标框 ， 填入 y_true
                 #   如果第一个anchor与第一个目标的over_threshold[mask]为false ， 则认为该anchor 需要负责该目标
                 #   根据目标的中心点找出所有的可能落入的网格点，将这些网格点对应位置填上内容
@@ -522,6 +522,12 @@ class YoloDataset(Dataset):
                         #----------------------------------------#
                         #   k 0 1 2 表示
                         #   tx、ty代表中心调整参数的真实值
+                        #   y_true[l][k, local_j, local_i, 0]
+                        #   l : 三个特征层 20 * 20 40 * 40 80 * 80
+                        #   k ：每个特征层每个点都最多3个预测框
+                        #   local_j ：行数 20
+                        #   local_i ：列数 20
+                        #   每个像素点有85维
                         #----------------------------------------#
                         y_true[l][k, local_j, local_i, 0] = batch_target[t, 0]
                         y_true[l][k, local_j, local_i, 1] = batch_target[t, 1]
