@@ -468,9 +468,18 @@ class YoloDataset(Dataset):
                 #-------------------------------------------------------#
                 #   ratio : 9
                 #   真实框是由哪几个anchor负责预测?宽高比例小于4的anchor负责预测
+                #   anchors_mask表示anchor的真实索引，也就是over_threshold中的索引
                 #-------------------------------------------------------#
                 over_threshold = ratio < self.threshold
                 over_threshold[np.argmin(ratio)] = True
+                
+                #-------------------------------------------------------#
+                #   每个网格负责预测三个预测框 
+                #   遍历3个anchor ，分别找出所有该anchor对应的目标框 ， 填入 y_true
+                #   如果第一个anchor与第一个目标的over_threshold[mask]为false ， 则认为该anchor 需要负责该目标
+                #   根据目标的中心点找出所有的可能落入的网格点，将这些网格点对应位置填上内容
+                #-------------------------------------------------------#
+                
                 for k, mask in enumerate(self.anchors_mask[l]):
                     if not over_threshold[mask]:
                         continue
@@ -482,8 +491,17 @@ class YoloDataset(Dataset):
                     i = int(np.floor(batch_target[t, 0]))
                     j = int(np.floor(batch_target[t, 1]))
                     
+                    #-------------------------------------------------------#
+                    #   根据网格点获取最近的网格点坐标，其实就是以i j 为中心 
+                    #   判断中心点偏于向周边的网格点，返回偏移3个偏移方向，
+                    #   也就是说每一个点会落在三个网格点中 offsets 长度为3
+                    #-------------------------------------------------------#
+                    
                     offsets = self.get_near_points(batch_target[t, 0], batch_target[t, 1], i, j)
                     for offset in offsets:
+                        #-------------------------------------------------------#
+                        #   local_i local_j 真实的网格点x y 位置
+                        #-------------------------------------------------------#
                         local_i = i + offset[0]
                         local_j = j + offset[1]
 
@@ -502,6 +520,7 @@ class YoloDataset(Dataset):
                         c = int(batch_target[t, 4])
 
                         #----------------------------------------#
+                        #   k 0 1 2 表示
                         #   tx、ty代表中心调整参数的真实值
                         #----------------------------------------#
                         y_true[l][k, local_j, local_i, 0] = batch_target[t, 0]
