@@ -406,11 +406,18 @@ class YoloDataset(Dataset):
         
         for l in range(num_layers):
             in_h, in_w      = grid_shapes[l]
+            
+            #-------------------------------------------------------#
+            #   anchor在特征层上的宽高 = 原图宽高anchor /  比例
+            #-------------------------------------------------------#
             anchors         = np.array(self.anchors) / {0:32, 1:16, 2:8, 3:4}[l]
             
             batch_target = np.zeros_like(targets)
             #-------------------------------------------------------#
             #   计算出正样本在特征层上的中心点
+            #   targets[:, [0,2]] 第0和2列代表归一化之后坐标中心点x和宽,水平方向缩放in_w
+            #   targets[:, [1,3]] 第1和3列代表归一化之后坐标中心点y和宽,水平方向缩放in_h
+            #   targets[:, 4] 真实框类别
             #-------------------------------------------------------#
             batch_target[:, [0,2]]  = targets[:, [0,2]] * in_w
             batch_target[:, [1,3]]  = targets[:, [1,3]] * in_h
@@ -421,12 +428,16 @@ class YoloDataset(Dataset):
             #   anchors                     : 9, 2
             #   np.expand_dims(anchors, 0)  : 1, 9, 2
             #   
-            #   ratios_of_gt_anchors代表每一个真实框和每一个先验框的宽高的比值
+            #   ratios_of_gt_anchors    代表每一个真实框和每一个先验框的宽高的比值，每一个框得宽、高分别除以每一个anchor的宽和高
+            #   那么每一个框都有9组这样的比值，每一组有两个值，分别是宽比值、高比值
             #   ratios_of_gt_anchors    : num_true_box, 9, 2
+            
             #   ratios_of_anchors_gt代表每一个先验框和每一个真实框的宽高的比值
             #   ratios_of_anchors_gt    : num_true_box, 9, 2
             #
+            #   ratios 是把ratios_of_gt_anchors 和 ratios_of_anchors_gt 水平方向拼接在一起 ， 每个框有9组比值，每组比值有4个数据
             #   ratios                  : num_true_box, 9, 4
+            
             #   max_ratios代表每一个真实框和每一个先验框的宽高的比值的最大值
             #   max_ratios              : num_true_box, 9
             #-------------------------------------------------------#
