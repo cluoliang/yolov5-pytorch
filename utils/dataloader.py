@@ -394,24 +394,36 @@ class YoloDataset(Dataset):
         #-----------------------------------------------------------#
         #   一共有三个特征层数
         #-----------------------------------------------------------#
-        num_layers  = len(self.anchors_mask)
         
+        num_layers  = len(self.anchors_mask)
         input_shape = np.array(self.input_shape, dtype='int32')
+        
+        # 三个特征层维度:(640/32,640/32) = (20,20) (640/16,640/16) = (40,40) (640/8,640/8) = (80,80)
         grid_shapes = [input_shape // {0:32, 1:16, 2:8, 3:4}[l] for l in range(num_layers)]
+        # y_true维度 3 * 20 * 20 * (5 + 80)、 3 * 40 * 40 * (5 + 80) 、3 * 80 * 80 * (5 + 80)
         y_true      = [np.zeros((len(self.anchors_mask[l]), grid_shapes[l][0], grid_shapes[l][1], self.bbox_attrs), dtype='float32') for l in range(num_layers)]
+        # box_best_ratio 维度 3 * 20 * 20  3 * 40 * 40 3 * 80 * 80
         box_best_ratio = [np.zeros((len(self.anchors_mask[l]), grid_shapes[l][0], grid_shapes[l][1]), dtype='float32') for l in range(num_layers)]
         
         if len(targets) == 0:
             return y_true
+        #-----------------------------------------------------------#
+        #   1、分别计算所有的 gt box 宽高 与 9个 anchor的宽高比例 num_true_box * 9 * 5
+        #   2、从1中选出与每个anchor比例的最大值, num_true_box * 9 , 9表示与9个anchor比例的最大值
+        #   3、9个比例分别于比例阈值比较,例如比值为第5位置比例为5 阈值为4 , 5 > 4 , 表示该框由第五个anchor负责预测
+        #   4、3中只是说明该框有anchor负责预测,但是该框
+        #-----------------------------------------------------------#
         
         for l in range(num_layers):
             in_h, in_w      = grid_shapes[l]
             
             #-------------------------------------------------------#
-            #   anchor在特征层上的宽高 = 原图宽高anchor /  比例
+            #   anchor在特征层上的宽高 = 原图宽高 anchor /  比例
+            #   anchors 维度(9 * 2)
             #-------------------------------------------------------#
             anchors         = np.array(self.anchors) / {0:32, 1:16, 2:8, 3:4}[l]
             
+            # targets维度N * 5 , 真实框的  cx cy w h class
             batch_target = np.zeros_like(targets)
             #-------------------------------------------------------#
             #   计算出正样本在特征层上的中心点
@@ -479,7 +491,7 @@ class YoloDataset(Dataset):
                 #   如果第一个anchor与第一个目标的over_threshold[mask]为false ， 则认为该anchor 需要负责该目标
                 #   根据目标的中心点找出所有的可能落入的网格点，将这些网格点对应位置填上内容
                 #-------------------------------------------------------#
-                
+  
                 for k, mask in enumerate(self.anchors_mask[l]):
                     if not over_threshold[mask]:
                         continue
@@ -507,7 +519,11 @@ class YoloDataset(Dataset):
 
                         if local_i >= in_w or local_i < 0 or local_j >= in_h or local_j < 0:
                             continue
-
+                        #-------------------------------------------------------#
+                        #   同一个真实框需要选择一个最匹配的anchor来负责预测
+                        #   如果此位置已经有anchor负责预测，但是跟另外一个anchor更加吻合
+                        #   则删除当前的
+                        #-------------------------------------------------------#
                         if box_best_ratio[l][k, local_j, local_i] != 0:
                             if box_best_ratio[l][k, local_j, local_i] > ratio[mask]:
                                 y_true[l][k, local_j, local_i, :] = 0
