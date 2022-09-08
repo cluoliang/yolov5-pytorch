@@ -408,10 +408,13 @@ class YoloDataset(Dataset):
         if len(targets) == 0:
             return y_true
         #-----------------------------------------------------------#
-        #   1、分别计算所有的 gt box 宽高 与 9个 anchor的宽高比例 num_true_box * 9 * 5
-        #   2、从1中选出与每个anchor比例的最大值, num_true_box * 9 , 9表示与9个anchor比例的最大值
-        #   3、9个比例分别于比例阈值比较,例如比值为第5位置比例为5 阈值为4 , 5 > 4 , 表示该框由第五个anchor负责预测
-        #   4、3中只是说明该框有anchor负责预测,但是该框
+        #   寻找与gt box 最接近的anchor
+        #       1、gt box 分别和每个anchor计算宽高比 ， gt(w,h)/anchor(w,h) anchor(w,h)/gt(w,h) , 维度num_true_box * 9 * 4
+        #       2、从1中4个比值中取最大值，维度num_true_box * 9 ，9表示gt box 与 9个anchor比值最大值
+        #       3、9个比值最大值分别和设定的阈值比较，比值>阈值的anchor负责预测该gt，这里有可能有多个anchor负责预测该gt
+        #   同层特征层正样本(3 * 20 * 20 * 85)举例
+        #       1、根据上述3中比较，依次遍历该层3个anchor对应的比值，判定该层的anchor是否需要预测该gt
+        #       2、寻找gt在feature中心点最近三个坐标点，比如gt中心点浮点坐标<10.6,10.7> , 那么相近的点有<10,10> <11,10> <10,11>三个中心点，这三个点都负责预测该gt
         #-----------------------------------------------------------#
         
         for l in range(num_layers):
@@ -520,16 +523,14 @@ class YoloDataset(Dataset):
                         if local_i >= in_w or local_i < 0 or local_j >= in_h or local_j < 0:
                             continue
                         #-------------------------------------------------------#
-                        #   同一个真实框需要选择一个最匹配的anchor来负责预测
-                        #   如果此位置已经有anchor负责预测，但是跟另外一个anchor更加吻合
-                        #   则删除当前的
+                        #   每个特征点有三个anchor，选择一个最合适的anchor负责预测
+                        #   该点已经有anchor预测，但是有比其更合适的anchor负责预测
                         #-------------------------------------------------------#
                         if box_best_ratio[l][k, local_j, local_i] != 0:
                             if box_best_ratio[l][k, local_j, local_i] > ratio[mask]:
                                 y_true[l][k, local_j, local_i, :] = 0
                             else:
                                 continue
-                            
                         #----------------------------------------#
                         #   取出真实框的种类
                         #----------------------------------------#
